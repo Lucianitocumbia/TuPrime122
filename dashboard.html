@@ -1,0 +1,299 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<meta name="description" content="TUPRIME — panel de gestión de ventas para gimnasios.">
+<meta name="theme-color" content="#101214">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Crect width='100' height='100' rx='18' fill='%23101214'/%3E%3Crect x='40' y='18' width='20' height='64' rx='4' fill='%23e8112d'/%3E%3C/svg%3E">
+<title>Panel · TUPRIME</title>
+<link rel="stylesheet" href="css/style.css">
+<link rel="stylesheet" href="css/dashboard.css">
+<link rel="stylesheet" href="css/productos.css">
+</head>
+<body>
+
+<div class="mobile-topbar">
+  <div class="brand"><span class="bar"></span> TUPRIME</div>
+  <button class="burger" id="btn-open-sidebar">☰</button>
+</div>
+<div class="sidebar-scrim" id="sidebar-scrim"></div>
+
+<div class="app-shell">
+
+  <aside class="sidebar" id="sidebar">
+    <div class="brand"><span class="bar"></span> TUPRIME</div>
+
+    <ul class="nav-group">
+      <li><button class="nav-item active" data-section="inicio"><span class="nav-icon">⌂</span> Inicio</button></li>
+      <li><button class="nav-item" data-section="productos"><span class="nav-icon">▦</span> Productos</button></li>
+      <li><button class="nav-item" data-section="nueva-compra"><span class="nav-icon">＋</span> Nueva compra</button></li>
+      <li><button class="nav-item" data-section="historial"><span class="nav-icon">≡</span> Historial de compras</button></li>
+      <li><button class="nav-item" data-section="estadisticas"><span class="nav-icon">◔</span> Estadísticas</button></li>
+      <li><button class="nav-item" data-section="configuracion"><span class="nav-icon">⚙</span> Configuración</button></li>
+    </ul>
+
+    <div class="sidebar-footer">
+      <div class="user-pill">
+        <div class="user-avatar" id="user-avatar">U</div>
+        <div>
+          <div class="u-name" id="user-name">Usuario</div>
+          <div class="u-role">Administrador</div>
+        </div>
+      </div>
+      <button class="nav-item" id="btn-logout"><span class="nav-icon">⏻</span> Cerrar sesión</button>
+    </div>
+  </aside>
+
+  <main class="content">
+
+    <!-- ==================== INICIO ==================== -->
+    <section class="section-view active" id="view-inicio">
+      <div class="content-header">
+        <div>
+          <h1>Inicio</h1>
+          <p class="desc">Resumen general de la actividad del gimnasio.</p>
+        </div>
+      </div>
+
+      <div class="stats-grid" id="inicio-stats"></div>
+
+      <div class="two-col">
+        <div class="panel">
+          <h3>Últimas compras</h3>
+          <div id="inicio-ultimas-compras"></div>
+        </div>
+        <div class="panel">
+          <h3>Productos con poco stock</h3>
+          <div id="inicio-poco-stock"></div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ==================== PRODUCTOS ==================== -->
+    <section class="section-view" id="view-productos">
+      <div class="content-header">
+        <div>
+          <h1>Productos</h1>
+          <p class="desc">Administrá el catálogo de bebidas y suplementos.</p>
+        </div>
+        <button class="btn btn-primary" id="btn-nuevo-producto">＋ Nuevo producto</button>
+      </div>
+
+      <div class="toolbar">
+        <input type="text" id="prod-buscar" class="search-input" placeholder="Buscar producto...">
+        <select id="prod-filtro-categoria"></select>
+        <div class="spacer"></div>
+      </div>
+
+      <div class="product-grid" id="productos-grid"></div>
+    </section>
+
+    <!-- ==================== NUEVA COMPRA ==================== -->
+    <section class="section-view" id="view-nueva-compra">
+      <div class="content-header">
+        <div>
+          <h1>Nueva compra</h1>
+          <p class="desc">Elegí productos, agregalos al carrito y confirmá la venta.</p>
+        </div>
+      </div>
+
+      <div class="compra-layout">
+        <div>
+          <div class="toolbar">
+            <input type="text" id="compra-buscar" class="search-input" placeholder="Buscar producto...">
+          </div>
+          <div class="catalog-list" id="compra-catalogo"></div>
+        </div>
+
+        <div class="cart-panel">
+          <h3 style="margin-bottom:14px;">Carrito</h3>
+          <div class="cart-items" id="carrito-items"></div>
+          <div class="cart-total-row">
+            <span class="t-label">Total</span>
+            <span class="t-value" id="carrito-total">$0</span>
+          </div>
+          <button class="btn btn-primary btn-block" id="btn-confirmar-compra">Confirmar compra</button>
+        </div>
+      </div>
+    </section>
+
+    <!-- ==================== HISTORIAL ==================== -->
+    <section class="section-view" id="view-historial">
+      <div class="content-header">
+        <div>
+          <h1>Historial de compras</h1>
+          <p class="desc">Consultá, buscá y filtrá todas las ventas registradas.</p>
+        </div>
+      </div>
+
+      <div class="toolbar">
+        <input type="text" id="hist-buscar" class="search-input" placeholder="Buscar por producto o número...">
+        <input type="date" id="hist-filtro-fecha" style="max-width:180px;">
+        <div class="spacer"></div>
+      </div>
+
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th>N° compra</th>
+              <th>Fecha</th>
+              <th>Productos</th>
+              <th>Unidades</th>
+              <th>Total</th>
+              <th></th>
+            </tr>
+          </thead>
+          <tbody id="historial-body"></tbody>
+        </table>
+      </div>
+    </section>
+
+    <!-- ==================== ESTADÍSTICAS ==================== -->
+    <section class="section-view" id="view-estadisticas">
+      <div class="content-header">
+        <div>
+          <h1>Estadísticas</h1>
+          <p class="desc">Panorama de las ventas y el estado del inventario.</p>
+        </div>
+      </div>
+
+      <div class="stats-grid" id="stats-cards"></div>
+
+      <div class="panel">
+        <h3>Productos con poco stock o agotados</h3>
+        <div id="stats-poco-stock"></div>
+      </div>
+    </section>
+
+    <!-- ==================== CONFIGURACIÓN ==================== -->
+    <section class="section-view" id="view-configuracion">
+      <div class="content-header">
+        <div>
+          <h1>Configuración</h1>
+          <p class="desc">Preferencias generales del sistema.</p>
+        </div>
+      </div>
+
+      <div class="panel">
+        <h3>Datos del sistema</h3>
+        <p style="color:var(--text-lo); font-size:14px; margin-bottom:16px;">
+          Todos los datos (productos, compras y sesión) se guardan localmente en este navegador mediante
+          <code>localStorage</code>. No se envía información a ningún servidor.
+        </p>
+        <div style="display:flex; gap:10px; flex-wrap:wrap;">
+          <button class="btn btn-secondary" id="btn-exportar-datos">Exportar datos (JSON)</button>
+          <button class="btn btn-danger" id="btn-reiniciar-datos">Restaurar datos de ejemplo</button>
+        </div>
+      </div>
+
+      <div class="panel">
+        <h3>Cuenta</h3>
+        <p style="color:var(--text-lo); font-size:14px; margin-bottom:16px;">Sesión iniciada como <strong id="config-usuario">—</strong>.</p>
+        <button class="btn btn-danger" id="btn-logout-config">Cerrar sesión</button>
+      </div>
+    </section>
+
+  </main>
+</div>
+
+<!-- ==================== MODAL: Crear/Editar producto ==================== -->
+<div class="modal-overlay" id="modal-producto">
+  <div class="modal">
+    <div class="modal-header">
+      <h3 id="modal-producto-titulo">Nuevo producto</h3>
+      <button class="modal-close" data-close-modal="modal-producto">✕</button>
+    </div>
+    <form id="form-producto">
+      <input type="hidden" id="pf-id">
+      <div class="form-row">
+        <label for="pf-nombre">Nombre</label>
+        <input type="text" id="pf-nombre" placeholder="Ej: Proteína Whey 1kg">
+      </div>
+      <div class="form-row">
+        <label for="pf-descripcion">Descripción</label>
+        <textarea id="pf-descripcion" rows="3" placeholder="Breve descripción del producto"></textarea>
+      </div>
+      <div class="form-grid-2">
+        <div class="form-row">
+          <label for="pf-precio">Precio</label>
+          <input type="number" id="pf-precio" min="0" step="1" placeholder="0">
+        </div>
+        <div class="form-row">
+          <label for="pf-stock">Stock</label>
+          <input type="number" id="pf-stock" min="0" step="1" placeholder="0">
+        </div>
+      </div>
+      <div class="form-row">
+        <label for="pf-categoria">Categoría</label>
+        <select id="pf-categoria"></select>
+      </div>
+      <div class="form-row">
+        <label>Imagen del producto</label>
+        <div class="image-upload-row">
+          <div class="image-upload-preview" id="pf-imagen-preview"><span class="placeholder-icon">🏋️</span></div>
+          <div class="image-upload-controls">
+            <label for="pf-imagen-file" class="btn btn-secondary btn-sm image-upload-btn">Subir JPG o PNG</label>
+            <input type="file" id="pf-imagen-file" accept="image/png, image/jpeg" class="hidden">
+            <button type="button" class="btn btn-ghost btn-sm" id="pf-imagen-quitar">Quitar imagen</button>
+          </div>
+        </div>
+        <input type="hidden" id="pf-imagen">
+        <p class="field-hint">También podés pegar una URL en lugar de subir un archivo:</p>
+        <input type="text" id="pf-imagen-url" placeholder="https://... (opcional)">
+      </div>
+      <div class="form-actions">
+        <button type="button" class="btn btn-secondary" data-close-modal="modal-producto">Cancelar</button>
+        <button type="submit" class="btn btn-primary">Guardar producto</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<!-- ==================== MODAL: Confirmar eliminación de producto ==================== -->
+<div class="modal-overlay" id="modal-confirmar-eliminar">
+  <div class="modal" style="max-width:380px;">
+    <div class="modal-header">
+      <h3>Eliminar producto</h3>
+      <button class="modal-close" data-close-modal="modal-confirmar-eliminar">✕</button>
+    </div>
+    <p style="font-size:14px; color:var(--text-lo);">Esta acción no se puede deshacer. ¿Confirmás que querés eliminar este producto?</p>
+    <div class="form-actions">
+      <button type="button" class="btn btn-secondary" data-close-modal="modal-confirmar-eliminar">Cancelar</button>
+      <button type="button" class="btn btn-danger" id="btn-confirmar-eliminar-producto">Eliminar</button>
+    </div>
+  </div>
+</div>
+
+<!-- ==================== MODAL: Detalle de compra ==================== -->
+<div class="modal-overlay" id="modal-detalle-compra">
+  <div class="modal">
+    <div class="modal-header">
+      <h3>Detalle de compra</h3>
+      <button class="modal-close" data-close-modal="modal-detalle-compra">✕</button>
+    </div>
+    <div id="detalle-compra-body"></div>
+  </div>
+</div>
+
+<!-- ==================== MODAL: Confirmar eliminación de compra ==================== -->
+<div class="modal-overlay" id="modal-confirmar-eliminar-compra">
+  <div class="modal" style="max-width:380px;">
+    <div class="modal-header">
+      <h3>Eliminar compra</h3>
+      <button class="modal-close" data-close-modal="modal-confirmar-eliminar-compra">✕</button>
+    </div>
+    <p style="font-size:14px; color:var(--text-lo);">¿Confirmás que querés eliminar esta compra del historial? El stock ya descontado no se restaurará automáticamente.</p>
+    <div class="form-actions">
+      <button type="button" class="btn btn-secondary" data-close-modal="modal-confirmar-eliminar-compra">Cancelar</button>
+      <button type="button" class="btn btn-danger" id="btn-confirmar-eliminar-compra">Eliminar</button>
+    </div>
+  </div>
+</div>
+
+<div id="toast-container"></div>
+
+<script type="module" src="js/app.js"></script>
+</body>
+</html>
