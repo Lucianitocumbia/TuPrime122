@@ -1,7 +1,7 @@
 // app.js
 // Responsabilidad única: inicializar el dashboard, cargar datos al arrancar
 // y coordinar la comunicación entre auth.js, productos.js, compras.js y ui.js.
-// No contiene reglas de negocio propias ni manipula localStorage directamente.
+// No contiene reglas de negocio propias ni habla con Firestore directamente.
 
 import { requireAuth, logout } from './auth.js';
 import { iniciar as iniciarStore, alCambiar } from './store.js';
@@ -449,16 +449,6 @@ function wireConfiguracion() {
     showToast('Datos exportados.', 'success');
   });
 
-  // Los productos ya viven en la nube: este botón borraba claves de
-  // localStorage que ya no mandan, así que reiniciarlos sería engañoso (y en
-  // la nube, destructivo). Queda deshabilitado hasta la fase 4, donde se rehace
-  // como "restablecer datos del gimnasio" con su propia confirmación.
-  const btnReiniciar = document.getElementById('btn-reiniciar-datos');
-  btnReiniciar.disabled = true;
-  btnReiniciar.title = 'Disponible cuando termine la migración a la nube.';
-  btnReiniciar.addEventListener('click', () => {
-    showToast('Los productos ahora están en la nube. Esta opción vuelve al terminar la migración.', 'error');
-  });
 }
 
 init();

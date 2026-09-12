@@ -1,0 +1,112 @@
+// Reglas de seguridad de Firestore — TUPRIME
+//
+// Este archivo es la fuente de verdad de las reglas. Para aplicarlas:
+// consola de Firebase → Firestore Database → pestaña Reglas → pegar → Publicar.
+//
+// Modelo: cada gimnasio es una rama de gimnasios/{gimnasioId}. El perfil del
+// usuario (usuarios/{uid}) dice a qué gimnasio pertenece y con qué rol. El
+// aislamiento es estructural: para leer datos de otro gimnasio habría que
+// nombrar su ruta, y perteneceA() lo corta.
+
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    /* ---------------- Helpers ---------------- */
+
+    function logueado() {
+      return request.auth != null;
+    }
+
+    function rutaPerfil() {
+      return /databases/$(database)/documents/usuarios/$(request.auth.uid);
+    }
+
+    function tienePerfil() {
+      return logueado() && exists(rutaPerfil());
+    }
+
+    function perfil() {
+      return get(rutaPerfil()).data;
+    }
+
+    // Miembro activo del gimnasio indicado.
+    function perteneceA(gimnasioId) {
+      return tienePerfil()
+             && perfil().gimnasioId == gimnasioId
+             && perfil().activo == true;
+    }
+
+    function esAdminDe(gimnasioId) {
+      return perteneceA(gimnasioId) && perfil().rol == 'admin';
+    }
+
+    /* ---------------- Perfiles de usuario ---------------- */
+    // Cada quien lee sólo el suyo. El alta y la baja se hacen desde la consola:
+    // si la app pudiera escribir acá, cualquiera se ascendería a admin o se
+    // mudaría a otro gimnasio.
+
+    match /usuarios/{uid} {
+      allow read:  if logueado() && request.auth.uid == uid;
+      allow write: if false;
+    }
+
+    /* ---------------- Datos de cada gimnasio ---------------- */
+
+    match /gimnasios/{gimnasioId} {
+
+      allow read:  if perteneceA(gimnasioId);
+      allow write: if false;   // el alta de un gimnasio es tarea de la consola
+
+      match /productos/{productoId} {
+        allow read: if perteneceA(gimnasioId);
+
+        // Sólo el admin administra el catálogo.
+        allow create, delete: if esAdminDe(gimnasioId);
+
+        // Un update es válido si lo hace el admin (edición del producto) o si
+        // es una venta: cualquier miembro puede bajar el stock, nunca subirlo,
+        // nunca dejarlo negativo y sin tocar ningún otro campo. Es lo que
+        // permite que mañana un empleado venda sin poder editar precios.
+        allow update: if esAdminDe(gimnasioId) || (
+          perteneceA(gimnasioId)
+          && request.resource.data.diff(resource.data).affectedKeys()
+               .hasOnly(['stock', 'actualizadoEn'])
+          && request.resource.data.stock is number
+          && request.resource.data.stock >= 0
+          && request.resource.data.stock < resource.data.stock
+        );
+      }
+
+      match /compras/{compraId} {
+        allow read: if perteneceA(gimnasioId);
+
+        // Una compra se crea a nombre de quien la registra: nadie puede
+        // atribuirle una venta a otro.
+        allow create: if perteneceA(gimnasioId)
+                      && request.resource.data.usuarioId == request.auth.uid
+                      && request.resource.data.total is number
+                      && request.resource.data.total >= 0
+                      && request.resource.data.items.size() > 0;
+
+        // Una compra es un registro histórico: no se edita nunca.
+        allow update: if false;
+
+        allow delete: if esAdminDe(gimnasioId);
+      }
+
+      // El contador de números de compra lo escribe la transacción de la venta,
+      // así que tiene que poder tocarlo cualquier miembro.
+      match /meta/contadores {
+        allow read, write: if perteneceA(gimnasioId);
+      }
+
+      // El resto de meta (la marca del seed inicial) es cosa del admin.
+      match /meta/{documento} {
+        allow read:  if perteneceA(gimnasioId);
+        allow write: if esAdminDe(gimnasioId);
+      }
+    }
+  }
+}

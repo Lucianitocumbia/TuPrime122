@@ -179,12 +179,11 @@
       <div class="panel">
         <h3>Datos del sistema</h3>
         <p style="color:var(--text-lo); font-size:14px; margin-bottom:16px;">
-          Todos los datos (productos, compras y sesión) se guardan localmente en este navegador mediante
-          <code>localStorage</code>. No se envía información a ningún servidor.
+          Los productos y las compras se guardan en la nube (Firebase) y se sincronizan solos entre
+          todos los dispositivos donde inicies sesión. Podés descargar una copia cuando quieras.
         </p>
         <div style="display:flex; gap:10px; flex-wrap:wrap;">
           <button class="btn btn-secondary" id="btn-exportar-datos">Exportar datos (JSON)</button>
-          <button class="btn btn-danger" id="btn-reiniciar-datos">Restaurar datos de ejemplo</button>
         </div>
       </div>
 
