@@ -5,7 +5,7 @@
 
 import {
   addDoc, updateDoc, deleteDoc, onSnapshot, query, orderBy,
-  serverTimestamp, runTransaction, writeBatch, increment, doc,
+  serverTimestamp, runTransaction, doc,
 } from 'https://www.gstatic.com/firebasejs/11.10.0/firebase-firestore.js';
 
 import { db, gimnasioCol, gimnasioDocEn } from '../firebase.js';
@@ -45,22 +45,9 @@ export function eliminar(id) {
   return deleteDoc(gimnasioDocEn('productos', id));
 }
 
-/**
- * Descuenta stock de varios productos de una sola vez.
- * Usa increment() en lugar de leer-modificar-escribir: el servidor aplica la
- * resta de forma atómica, así que dos ventas simultáneas no se pisan.
- * items: [{ productoId, cantidad }]
- */
-export function descontarStock(items) {
-  const batch = writeBatch(db);
-  items.forEach(({ productoId, cantidad }) => {
-    batch.update(gimnasioDocEn('productos', productoId), {
-      stock: increment(-cantidad),
-      actualizadoEn: serverTimestamp(),
-    });
-  });
-  return batch.commit();
-}
+// El descuento de stock por una venta NO está acá: ocurre dentro de la
+// transacción de data/comprasRepo.js, junto con la validación de stock y el
+// alta de la compra, para que sea todo o nada.
 
 /**
  * Carga los productos de ejemplo la primera vez, de forma idempotente.

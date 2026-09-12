@@ -1,9 +1,16 @@
 // compras.js
 // Responsabilidad única: carrito de la compra en curso, confirmación de
 // compras, descuento de stock asociado y cálculo de estadísticas de venta.
+//
+// El historial vive en Firestore. Las LECTURAS salen de store.js (caché
+// sincronizada en tiempo real) y siguen siendo sincrónicas; sólo confirmar y
+// eliminar son async.
 
-import { getCompras, saveCompras, getNextPurchaseId } from './storage.js';
-import { obtenerProducto, descontarStockDeItems, listarProductos, estadoStock } from './productos.js';
+import { getCompras as comprasEnCache } from './store.js';
+import * as repo from './data/comprasRepo.js';
+import { obtenerProducto, listarProductos, estadoStock } from './productos.js';
+import { getCurrentUser } from './auth.js';
+import { mensajeDeError } from './firebase.js';
 
 // Carrito en memoria: se reinicia cada vez que se confirma una compra
 // o se recarga la página (no necesita persistir, sólo la compra final).
@@ -71,20 +78,19 @@ export function calcularTotalCarrito() {
 }
 
 /**
- * Confirma la compra actual: valida stock, lo descuenta en la nube y recién
- * entonces registra la compra y vacía el carrito.
+ * Confirma la compra actual.
  *
- * El stock ya vive en Firestore (fase 2), la compra todavía en localStorage
- * (pasa a la nube, y a ser transaccional, en la fase 3). Por eso el orden
- * importa: si el descuento de stock falla, no queremos dejar registrada una
- * compra que nunca se cobró.
+ * La validación de stock que hacemos acá es sólo para dar un mensaje rápido:
+ * la que vale es la que corre en el servidor dentro de la transacción, porque
+ * entre que esta pantalla leyó el stock y confirma, otro vendedor pudo haber
+ * vendido lo mismo. Si el servidor rechaza, la compra no se registra y el
+ * stock no se toca.
  */
 export async function confirmarCompra() {
   if (carrito.length === 0) {
     return { ok: false, message: 'El carrito está vacío.' };
   }
 
-  // Revalidación de stock por si cambió desde que se agregó al carrito.
   for (const item of carrito) {
     const producto = obtenerProducto(item.productoId);
     if (!producto || producto.stock < item.cantidad) {
@@ -92,6 +98,7 @@ export async function confirmarCompra() {
     }
   }
 
+  const usuario = getCurrentUser();
   const items = carrito.map((i) => ({
     productoId: i.productoId,
     nombre: i.nombre,
@@ -100,54 +107,61 @@ export async function confirmarCompra() {
     subtotal: calcularSubtotal(i),
   }));
 
-  const descuento = await descontarStockDeItems(
-    items.map((i) => ({ productoId: i.productoId, cantidad: i.cantidad }))
-  );
-  if (!descuento.ok) return { ok: false, message: descuento.message };
+  try {
+    const compra = await repo.crearCompra({
+      items,
+      total: calcularTotalCarrito(),
+      usuarioId: usuario ? usuario.uid : null,
+      usuarioEmail: usuario ? usuario.email : null,
+    });
 
-  const compra = {
-    id: getNextPurchaseId(),
-    fecha: new Date().toISOString(),
-    items,
-    total: calcularTotalCarrito(),
-  };
-
-  const compras = getCompras();
-  compras.unshift(compra);
-  saveCompras(compras);
-
-  vaciarCarrito();
-
-  return { ok: true, compra };
+    vaciarCarrito();
+    return { ok: true, compra };
+  } catch (e) {
+    // Sin stock es una situación esperable, no una falla: su mensaje ya viene
+    // redactado para el usuario y no hace falta traducirlo.
+    if (e && e.codigo === repo.SIN_STOCK) {
+      return { ok: false, message: e.message };
+    }
+    return { ok: false, message: mensajeDeError(e, 'No se pudo registrar la compra.') };
+  }
 }
 
+/* ---------------- Lecturas (sincrónicas, desde la caché) ---------------- */
+
 export function listarCompras() {
-  return getCompras();
+  return comprasEnCache();
 }
 
 export function obtenerCompra(id) {
-  return getCompras().find((c) => c.id === id) || null;
-}
-
-export function eliminarCompra(id) {
-  const compras = getCompras().filter((c) => c.id !== id);
-  saveCompras(compras);
-  return { ok: true };
+  return comprasEnCache().find((c) => c.id === id) || null;
 }
 
 export function buscarYFiltrarCompras({ texto = '', fecha = '' } = {}) {
   const t = texto.trim().toLowerCase();
-  return getCompras().filter((c) => {
-    const matchTexto = !t || c.items.some((i) => i.nombre.toLowerCase().includes(t)) || String(c.id).includes(t);
+  return comprasEnCache().filter((c) => {
+    const matchTexto =
+      !t || c.items.some((i) => i.nombre.toLowerCase().includes(t)) || String(c.numero).includes(t);
     const matchFecha = !fecha || c.fecha.slice(0, 10) === fecha;
     return matchTexto && matchFecha;
   });
 }
 
+/* ---------------- Escrituras ---------------- */
+
+export async function eliminarCompra(id) {
+  try {
+    await repo.eliminar(id);
+    return { ok: true };
+  } catch (e) {
+    return { ok: false, message: mensajeDeError(e, 'No se pudo eliminar la compra.') };
+  }
+}
+
 /* ---------------- Estadísticas ---------------- */
 
 export function calcularEstadisticas() {
-  const compras = getCompras();
+  const compras = comprasEnCache();
   const productos = listarProductos();
 
   const ventasTotales = compras.reduce((acc, c) => acc + c.total, 0);

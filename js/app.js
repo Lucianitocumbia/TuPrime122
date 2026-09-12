@@ -51,7 +51,7 @@ async function init() {
   wireHistorial();
   wireConfiguracion();
 
-  mostrarCargandoProductos();
+  mostrarCargando();
 
   // Abre la suscripción en tiempo real y espera a que lleguen los datos.
   await iniciarStore({ onError: (mensaje) => showToast(mensaje, 'error') });
@@ -73,9 +73,11 @@ function renderTodo() {
   renderVistaEstadisticas();
 }
 
-function mostrarCargandoProductos() {
+function mostrarCargando() {
   document.getElementById('productos-grid').innerHTML =
     '<div class="empty-state"><p>Cargando productos…</p></div>';
+  document.getElementById('historial-body').innerHTML =
+    '<tr><td colspan="6"><div class="empty-state"><p>Cargando compras…</p></div></td></tr>';
 }
 
 /* ---------------- Navegación ---------------- */
@@ -362,8 +364,7 @@ function wireNuevaCompra() {
         showToast(resultado.message, 'error');
         return;
       }
-      showToast(`Compra #${resultado.compra.id} confirmada.`, 'success');
-      renderTodo();
+      showToast(`Compra #${resultado.compra.numero} confirmada.`, 'success');
     } finally {
       boton.disabled = false;
       boton.textContent = textoOriginal;
@@ -391,7 +392,7 @@ function wireHistorial() {
   document.getElementById('historial-body').addEventListener('click', (e) => {
     const btn = e.target.closest('button[data-action]');
     if (!btn) return;
-    const id = Number(btn.dataset.id);
+    const id = btn.dataset.id;
 
     if (btn.dataset.action === 'ver-compra') {
       const compra = obtenerCompra(id);
@@ -405,15 +406,23 @@ function wireHistorial() {
     }
   });
 
-  document.getElementById('btn-confirmar-eliminar-compra').addEventListener('click', () => {
+  document.getElementById('btn-confirmar-eliminar-compra').addEventListener('click', async (e) => {
     if (idCompraAEliminar === null) return;
-    eliminarCompra(idCompraAEliminar);
-    showToast('Compra eliminada del historial.', 'success');
-    idCompraAEliminar = null;
-    closeModal('modal-confirmar-eliminar-compra');
-    renderVistaHistorial();
-    renderInicio();
-    renderVistaEstadisticas();
+    const boton = e.currentTarget;
+    boton.disabled = true;
+    try {
+      const resultado = await eliminarCompra(idCompraAEliminar);
+      if (!resultado.ok) {
+        showToast(resultado.message, 'error');
+        return;
+      }
+      showToast('Compra eliminada del historial.', 'success');
+      idCompraAEliminar = null;
+      closeModal('modal-confirmar-eliminar-compra');
+      // El re-render llega solo por el onSnapshot del store.
+    } finally {
+      boton.disabled = false;
+    }
   });
 }
 

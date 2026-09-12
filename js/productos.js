@@ -5,7 +5,7 @@
 // Las LECTURAS salen de store.js (caché en memoria sincronizada con la nube),
 // por eso siguen siendo sincrónicas. Las ESCRITURAS van a Firestore y son async.
 
-import { getProductos as productosEnCache, productosEstanCargados } from './store.js';
+import { getProductos as productosEnCache, estanCargados as datosCargados } from './store.js';
 import * as repo from './data/productosRepo.js';
 import { mensajeDeError } from './firebase.js';
 
@@ -78,7 +78,7 @@ export function listarProductos() {
 }
 
 export function estanCargados() {
-  return productosEstanCargados();
+  return datosCargados();
 }
 
 export function obtenerProducto(id) {
@@ -148,19 +148,6 @@ export async function eliminarProducto(id) {
   }
 }
 
-/**
- * Descuenta stock de varios productos tras una compra confirmada.
- * No valida negativos: eso lo hace compras.js antes de llamar.
- * items: [{ productoId, cantidad }]
- */
-export async function descontarStockDeItems(items) {
-  try {
-    await repo.descontarStock(items);
-    return { ok: true };
-  } catch (e) {
-    return { ok: false, message: mensajeDeError(e, 'No se pudo actualizar el stock.') };
-  }
-}
 
 function validarProducto(datos) {
   const errores = [];

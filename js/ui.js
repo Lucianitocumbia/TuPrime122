@@ -175,7 +175,7 @@ export function renderHistorial(tbody, compras) {
   }
   tbody.innerHTML = compras.map((c) => `
     <tr data-id="${c.id}">
-      <td>#${c.id}</td>
+      <td>#${c.numero}</td>
       <td>${formatDate(c.fecha)}</td>
       <td>${c.items.length} producto(s)</td>
       <td>${c.items.reduce((a, i) => a + i.cantidad, 0)} unidad(es)</td>
@@ -190,7 +190,7 @@ export function renderHistorial(tbody, compras) {
 
 export function renderDetalleCompra(container, compra) {
   container.innerHTML = `
-    <div class="form-row"><strong>Compra #${compra.id}</strong></div>
+    <div class="form-row"><strong>Compra #${compra.numero}</strong></div>
     <div class="form-row" style="color:var(--text-lo); font-size:13px;">${formatDate(compra.fecha)}</div>
     <div class="panel" style="padding:0; margin-top:12px;">
       ${compra.items.map((i) => `
@@ -260,7 +260,7 @@ export function renderUltimasCompras(container, compras) {
   container.innerHTML = ultimas.map((c) => `
     <div class="list-row">
       <div>
-        <div class="rname">Compra #${c.id}</div>
+        <div class="rname">Compra #${c.numero}</div>
         <div class="rmeta">${formatDate(c.fecha)}</div>
       </div>
       <strong>${formatMoney(c.total)}</strong>
