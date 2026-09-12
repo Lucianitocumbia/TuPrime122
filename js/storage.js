@@ -1,13 +1,13 @@
 // storage.js
-// Responsabilidad única: leer, guardar, actualizar y eliminar datos en localStorage.
-// Ningún otro módulo debe llamar a localStorage directamente: todos pasan por aquí.
+// Responsabilidad única: leer y guardar en localStorage lo que todavía no
+// migró a la nube.
+//
+// Estado de la migración: productos y sesión ya viven en Firebase (ver
+// data/productosRepo.js y auth.js). Acá quedan sólo las compras, que pasan a
+// Firestore en la fase 3. Cuando eso ocurra, este archivo se elimina.
 
 const KEYS = {
-  PRODUCTS: 'gym_productos',
   PURCHASES: 'gym_compras',
-  SESSION: 'gym_session',
-  SEEDED: 'gym_seeded',
-  NEXT_PRODUCT_ID: 'gym_next_product_id',
   NEXT_PURCHASE_ID: 'gym_next_purchase_id',
 };
 
@@ -32,26 +32,6 @@ function writeJSON(key, value) {
   }
 }
 
-function remove(key) {
-  localStorage.removeItem(key);
-}
-
-/* ---------------- Productos ---------------- */
-
-export function getProductos() {
-  return readJSON(KEYS.PRODUCTS, []);
-}
-
-export function saveProductos(productos) {
-  return writeJSON(KEYS.PRODUCTS, productos);
-}
-
-export function getNextProductId() {
-  const next = readJSON(KEYS.NEXT_PRODUCT_ID, 1);
-  writeJSON(KEYS.NEXT_PRODUCT_ID, next + 1);
-  return next;
-}
-
 /* ---------------- Compras ---------------- */
 
 export function getCompras() {
@@ -66,30 +46,6 @@ export function getNextPurchaseId() {
   const next = readJSON(KEYS.NEXT_PURCHASE_ID, 1);
   writeJSON(KEYS.NEXT_PURCHASE_ID, next + 1);
   return next;
-}
-
-/* ---------------- Sesión ---------------- */
-
-export function getSession() {
-  return readJSON(KEYS.SESSION, null);
-}
-
-export function setSession(sessionData) {
-  return writeJSON(KEYS.SESSION, sessionData);
-}
-
-export function clearSession() {
-  remove(KEYS.SESSION);
-}
-
-/* ---------------- Semilla de datos iniciales ---------------- */
-
-export function isSeeded() {
-  return readJSON(KEYS.SEEDED, false);
-}
-
-export function markSeeded() {
-  writeJSON(KEYS.SEEDED, true);
 }
 
 export const STORAGE_KEYS = KEYS;

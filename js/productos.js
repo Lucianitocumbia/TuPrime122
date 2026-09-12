@@ -1,8 +1,13 @@
 // productos.js
 // Responsabilidad única: lógica de negocio sobre productos
 // (crear, editar, eliminar, buscar, filtrar y controlar stock).
+//
+// Las LECTURAS salen de store.js (caché en memoria sincronizada con la nube),
+// por eso siguen siendo sincrónicas. Las ESCRITURAS van a Firestore y son async.
 
-import { getProductos, saveProductos, getNextProductId, isSeeded, markSeeded } from './storage.js';
+import { getProductos as productosEnCache, productosEstanCargados } from './store.js';
+import * as repo from './data/productosRepo.js';
+import { mensajeDeError } from './firebase.js';
 
 export const CATEGORIAS = ['Bebidas', 'Suplementos', 'Proteínas', 'Snacks', 'Accesorios', 'Otros'];
 
@@ -52,85 +57,37 @@ const PRODUCTOS_INICIALES = [
   },
 ];
 
-/** Carga los productos de ejemplo la primera vez que se abre el sistema. */
-export function seedProductosIniciales() {
-  if (isSeeded()) return;
-  const productos = PRODUCTOS_INICIALES.map((p) => ({ id: getNextProductId(), ...p }));
-  saveProductos(productos);
-  markSeeded();
+/**
+ * Carga los productos de ejemplo la primera vez que se abre el sistema.
+ * Es idempotente y transaccional: no puede duplicar datos aunque se abra el
+ * sistema en dos dispositivos a la vez.
+ */
+export async function seedProductosIniciales() {
+  try {
+    const sembro = await repo.sembrarSiHaceFalta(PRODUCTOS_INICIALES);
+    return { ok: true, sembro };
+  } catch (e) {
+    return { ok: false, message: mensajeDeError(e, 'No se pudieron cargar los productos iniciales.') };
+  }
 }
 
+/* ---------------- Lecturas (sincrónicas, desde la caché) ---------------- */
+
 export function listarProductos() {
-  return getProductos();
+  return productosEnCache();
+}
+
+export function estanCargados() {
+  return productosEstanCargados();
 }
 
 export function obtenerProducto(id) {
-  return getProductos().find((p) => p.id === id) || null;
-}
-
-/**
- * Crea un producto nuevo. `datos` debe incluir nombre, descripcion, precio,
- * stock, categoria e imagen (imagen puede ser '' para usar el placeholder).
- */
-export function crearProducto(datos) {
-  const errores = validarProducto(datos);
-  if (errores.length) return { ok: false, errores };
-
-  const productos = getProductos();
-  const nuevo = {
-    id: getNextProductId(),
-    nombre: datos.nombre.trim(),
-    descripcion: datos.descripcion.trim(),
-    precio: Number(datos.precio),
-    stock: Number(datos.stock),
-    categoria: datos.categoria,
-    imagen: datos.imagen || '',
-  };
-  productos.push(nuevo);
-  saveProductos(productos);
-  return { ok: true, producto: nuevo };
-}
-
-export function editarProducto(id, datos) {
-  const errores = validarProducto(datos);
-  if (errores.length) return { ok: false, errores };
-
-  const productos = getProductos();
-  const idx = productos.findIndex((p) => p.id === id);
-  if (idx === -1) return { ok: false, errores: ['Producto no encontrado.'] };
-
-  productos[idx] = {
-    ...productos[idx],
-    nombre: datos.nombre.trim(),
-    descripcion: datos.descripcion.trim(),
-    precio: Number(datos.precio),
-    stock: Number(datos.stock),
-    categoria: datos.categoria,
-    imagen: datos.imagen || '',
-  };
-  saveProductos(productos);
-  return { ok: true, producto: productos[idx] };
-}
-
-export function eliminarProducto(id) {
-  const productos = getProductos().filter((p) => p.id !== id);
-  saveProductos(productos);
-  return { ok: true };
-}
-
-/** Descuenta stock tras una compra confirmada. No valida negativos (eso lo hace compras.js antes). */
-export function descontarStock(id, cantidad) {
-  const productos = getProductos();
-  const idx = productos.findIndex((p) => p.id === id);
-  if (idx === -1) return false;
-  productos[idx].stock = Math.max(0, productos[idx].stock - cantidad);
-  saveProductos(productos);
-  return true;
+  return productosEnCache().find((p) => p.id === id) || null;
 }
 
 export function buscarYFiltrar({ texto = '', categoria = '' } = {}) {
   const t = texto.trim().toLowerCase();
-  return getProductos().filter((p) => {
+  return productosEnCache().filter((p) => {
     const matchTexto = !t || p.nombre.toLowerCase().includes(t) || p.descripcion.toLowerCase().includes(t);
     const matchCategoria = !categoria || p.categoria === categoria;
     return matchTexto && matchCategoria;
@@ -141,6 +98,68 @@ export function estadoStock(stock) {
   if (stock <= 0) return 'agotado';
   if (stock <= STOCK_BAJO_UMBRAL) return 'bajo';
   return 'normal';
+}
+
+/* ---------------- Escrituras (async, contra Firestore) ---------------- */
+
+function normalizar(datos) {
+  return {
+    nombre: datos.nombre.trim(),
+    descripcion: datos.descripcion.trim(),
+    precio: Number(datos.precio),
+    stock: Number(datos.stock),
+    categoria: datos.categoria,
+    imagen: datos.imagen || '',
+  };
+}
+
+export async function crearProducto(datos) {
+  const errores = validarProducto(datos);
+  if (errores.length) return { ok: false, errores };
+
+  try {
+    const ref = await repo.crear(normalizar(datos));
+    return { ok: true, id: ref.id };
+  } catch (e) {
+    return { ok: false, errores: [mensajeDeError(e, 'No se pudo crear el producto.')] };
+  }
+}
+
+export async function editarProducto(id, datos) {
+  const errores = validarProducto(datos);
+  if (errores.length) return { ok: false, errores };
+
+  if (!obtenerProducto(id)) return { ok: false, errores: ['Producto no encontrado.'] };
+
+  try {
+    await repo.actualizar(id, normalizar(datos));
+    return { ok: true, id };
+  } catch (e) {
+    return { ok: false, errores: [mensajeDeError(e, 'No se pudo guardar el producto.')] };
+  }
+}
+
+export async function eliminarProducto(id) {
+  try {
+    await repo.eliminar(id);
+    return { ok: true };
+  } catch (e) {
+    return { ok: false, message: mensajeDeError(e, 'No se pudo eliminar el producto.') };
+  }
+}
+
+/**
+ * Descuenta stock de varios productos tras una compra confirmada.
+ * No valida negativos: eso lo hace compras.js antes de llamar.
+ * items: [{ productoId, cantidad }]
+ */
+export async function descontarStockDeItems(items) {
+  try {
+    await repo.descontarStock(items);
+    return { ok: true };
+  } catch (e) {
+    return { ok: false, message: mensajeDeError(e, 'No se pudo actualizar el stock.') };
+  }
 }
 
 function validarProducto(datos) {

@@ -3,7 +3,7 @@
 // compras, descuento de stock asociado y cálculo de estadísticas de venta.
 
 import { getCompras, saveCompras, getNextPurchaseId } from './storage.js';
-import { obtenerProducto, descontarStock, listarProductos, estadoStock } from './productos.js';
+import { obtenerProducto, descontarStockDeItems, listarProductos, estadoStock } from './productos.js';
 
 // Carrito en memoria: se reinicia cada vez que se confirma una compra
 // o se recarga la página (no necesita persistir, sólo la compra final).
@@ -71,10 +71,15 @@ export function calcularTotalCarrito() {
 }
 
 /**
- * Confirma la compra actual: valida stock una última vez, la guarda en
- * localStorage, descuenta stock de cada producto y vacía el carrito.
+ * Confirma la compra actual: valida stock, lo descuenta en la nube y recién
+ * entonces registra la compra y vacía el carrito.
+ *
+ * El stock ya vive en Firestore (fase 2), la compra todavía en localStorage
+ * (pasa a la nube, y a ser transaccional, en la fase 3). Por eso el orden
+ * importa: si el descuento de stock falla, no queremos dejar registrada una
+ * compra que nunca se cobró.
  */
-export function confirmarCompra() {
+export async function confirmarCompra() {
   if (carrito.length === 0) {
     return { ok: false, message: 'El carrito está vacío.' };
   }
@@ -87,16 +92,23 @@ export function confirmarCompra() {
     }
   }
 
+  const items = carrito.map((i) => ({
+    productoId: i.productoId,
+    nombre: i.nombre,
+    precioUnitario: i.precioUnitario,
+    cantidad: i.cantidad,
+    subtotal: calcularSubtotal(i),
+  }));
+
+  const descuento = await descontarStockDeItems(
+    items.map((i) => ({ productoId: i.productoId, cantidad: i.cantidad }))
+  );
+  if (!descuento.ok) return { ok: false, message: descuento.message };
+
   const compra = {
     id: getNextPurchaseId(),
     fecha: new Date().toISOString(),
-    items: carrito.map((i) => ({
-      productoId: i.productoId,
-      nombre: i.nombre,
-      precioUnitario: i.precioUnitario,
-      cantidad: i.cantidad,
-      subtotal: calcularSubtotal(i),
-    })),
+    items,
     total: calcularTotalCarrito(),
   };
 
@@ -104,7 +116,6 @@ export function confirmarCompra() {
   compras.unshift(compra);
   saveCompras(compras);
 
-  carrito.forEach((item) => descontarStock(item.productoId, item.cantidad));
   vaciarCarrito();
 
   return { ok: true, compra };

@@ -4,6 +4,8 @@
 // No contiene reglas de negocio propias ni manipula localStorage directamente.
 
 import { requireAuth, logout } from './auth.js';
+import { iniciar as iniciarStore, alCambiar } from './store.js';
+import { comprimirImagen } from './imagen.js';
 import {
   seedProductosIniciales, listarProductos, buscarYFiltrar,
   obtenerProducto, crearProducto, editarProducto, eliminarProducto,
@@ -35,8 +37,6 @@ async function init() {
   const perfil = await requireAuth();
   if (!perfil) return;
 
-  seedProductosIniciales();
-
   document.getElementById('user-name').textContent = perfil.nombre;
   document.getElementById('user-avatar').textContent = perfil.nombre.slice(0, 1).toUpperCase();
   document.getElementById('config-usuario').textContent = perfil.email;
@@ -51,11 +51,31 @@ async function init() {
   wireHistorial();
   wireConfiguracion();
 
+  mostrarCargandoProductos();
+
+  // Abre la suscripción en tiempo real y espera a que lleguen los datos.
+  await iniciarStore({ onError: (mensaje) => showToast(mensaje, 'error') });
+
+  const seed = await seedProductosIniciales();
+  if (!seed.ok) showToast(seed.message, 'error');
+
+  // Cualquier cambio en la nube — propio o de otro dispositivo — repinta solo.
+  alCambiar(renderTodo);
+
+  renderTodo();
+}
+
+function renderTodo() {
   renderInicio();
   renderVistaProductos();
   renderVistaNuevaCompra();
   renderVistaHistorial();
   renderVistaEstadisticas();
+}
+
+function mostrarCargandoProductos() {
+  document.getElementById('productos-grid').innerHTML =
+    '<div class="empty-state"><p>Cargando productos…</p></div>';
 }
 
 /* ---------------- Navegación ---------------- */
@@ -125,29 +145,22 @@ function wireProductos() {
 
   document.getElementById('btn-nuevo-producto').addEventListener('click', () => abrirModalProducto(null));
 
-  document.getElementById('pf-imagen-file').addEventListener('change', (e) => {
+  document.getElementById('pf-imagen-file').addEventListener('change', async (e) => {
     const file = e.target.files[0];
     if (!file) return;
 
-    if (!['image/jpeg', 'image/png'].includes(file.type)) {
-      showToast('Solo se aceptan imágenes JPG o PNG.', 'error');
-      e.target.value = '';
-      return;
-    }
-    const LIMITE_MB = 2;
-    if (file.size > LIMITE_MB * 1024 * 1024) {
-      showToast(`La imagen no puede superar los ${LIMITE_MB} MB.`, 'error');
+    // La imagen viaja dentro del documento de Firestore, que tiene un tope de
+    // 1 MiB: se redimensiona y recomprime en el navegador antes de guardarla.
+    const resultado = await comprimirImagen(file);
+    if (!resultado.ok) {
+      showToast(resultado.message, 'error');
       e.target.value = '';
       return;
     }
 
-    const reader = new FileReader();
-    reader.onload = () => {
-      document.getElementById('pf-imagen').value = reader.result;
-      document.getElementById('pf-imagen-url').value = '';
-      actualizarPreviewImagen(reader.result);
-    };
-    reader.readAsDataURL(file);
+    document.getElementById('pf-imagen').value = resultado.dataURL;
+    document.getElementById('pf-imagen-url').value = '';
+    actualizarPreviewImagen(resultado.dataURL);
   });
 
   document.getElementById('pf-imagen-url').addEventListener('input', (e) => {
@@ -166,7 +179,7 @@ function wireProductos() {
   document.getElementById('productos-grid').addEventListener('click', (e) => {
     const btn = e.target.closest('button[data-action]');
     if (!btn) return;
-    const id = Number(btn.dataset.id);
+    const id = btn.dataset.id;
 
     if (btn.dataset.action === 'editar-producto') abrirModalProducto(id);
     if (btn.dataset.action === 'eliminar-producto') {
@@ -187,35 +200,48 @@ function wireProductos() {
     }
   });
 
-  document.getElementById('btn-confirmar-eliminar-producto').addEventListener('click', () => {
+  document.getElementById('btn-confirmar-eliminar-producto').addEventListener('click', async (e) => {
     if (idProductoAEliminar === null) return;
-    eliminarProducto(idProductoAEliminar);
-    showToast('Producto eliminado.', 'success');
-    idProductoAEliminar = null;
-    closeModal('modal-confirmar-eliminar');
-    renderVistaProductos();
-    renderInicio();
+    const boton = e.currentTarget;
+    boton.disabled = true;
+    try {
+      const resultado = await eliminarProducto(idProductoAEliminar);
+      if (!resultado.ok) {
+        showToast(resultado.message, 'error');
+        return;
+      }
+      showToast('Producto eliminado.', 'success');
+      idProductoAEliminar = null;
+      closeModal('modal-confirmar-eliminar');
+      // No hace falta re-renderizar: el onSnapshot del store lo dispara solo.
+    } finally {
+      boton.disabled = false;
+    }
   });
 
-  document.getElementById('form-producto').addEventListener('submit', (e) => {
+  document.getElementById('form-producto').addEventListener('submit', async (e) => {
     e.preventDefault();
     const datos = leerFormularioProducto();
-    const idRaw = document.getElementById('pf-id').value;
+    const id = document.getElementById('pf-id').value;
 
-    const resultado = idRaw
-      ? editarProducto(Number(idRaw), datos)
-      : crearProducto(datos);
+    const boton = e.target.querySelector('button[type="submit"]');
+    const textoOriginal = boton ? boton.textContent : '';
+    if (boton) { boton.disabled = true; boton.textContent = 'Guardando…'; }
 
-    if (!resultado.ok) {
-      showToast(resultado.errores.join(' '), 'error');
-      return;
+    try {
+      const resultado = id ? await editarProducto(id, datos) : await crearProducto(datos);
+
+      if (!resultado.ok) {
+        showToast(resultado.errores.join(' '), 'error');
+        return;
+      }
+
+      showToast(id ? 'Producto actualizado.' : 'Producto creado.', 'success');
+      closeModal('modal-producto');
+      // El re-render llega solo por el onSnapshot del store.
+    } finally {
+      if (boton) { boton.disabled = false; boton.textContent = textoOriginal; }
     }
-
-    showToast(idRaw ? 'Producto actualizado.' : 'Producto creado.', 'success');
-    closeModal('modal-producto');
-    renderVistaProductos();
-    renderVistaNuevaCompra();
-    renderInicio();
   });
 }
 
@@ -291,7 +317,7 @@ function wireNuevaCompra() {
   document.getElementById('compra-catalogo').addEventListener('click', (e) => {
     const btn = e.target.closest('button[data-action="agregar-carrito"]');
     if (!btn) return;
-    const id = Number(btn.dataset.id);
+    const id = btn.dataset.id;
     const fila = btn.closest('.mini-product');
     const cantidad = Number(fila.querySelector('.qty-input').value) || 1;
 
@@ -307,7 +333,7 @@ function wireNuevaCompra() {
   document.getElementById('carrito-items').addEventListener('click', (e) => {
     const btn = e.target.closest('button[data-action]');
     if (!btn) return;
-    const id = Number(btn.dataset.id);
+    const id = btn.dataset.id;
     const item = obtenerCarrito().find((i) => i.productoId === id);
     if (!item) return;
 
@@ -324,17 +350,24 @@ function wireNuevaCompra() {
     renderCarritoActual();
   });
 
-  document.getElementById('btn-confirmar-compra').addEventListener('click', () => {
-    const resultado = confirmarCompra();
-    if (!resultado.ok) {
-      showToast(resultado.message, 'error');
-      return;
+  document.getElementById('btn-confirmar-compra').addEventListener('click', async (e) => {
+    const boton = e.currentTarget;
+    const textoOriginal = boton.textContent;
+    boton.disabled = true;
+    boton.textContent = 'Confirmando…';
+
+    try {
+      const resultado = await confirmarCompra();
+      if (!resultado.ok) {
+        showToast(resultado.message, 'error');
+        return;
+      }
+      showToast(`Compra #${resultado.compra.id} confirmada.`, 'success');
+      renderTodo();
+    } finally {
+      boton.disabled = false;
+      boton.textContent = textoOriginal;
     }
-    showToast(`Compra #${resultado.compra.id} confirmada.`, 'success');
-    renderVistaNuevaCompra();
-    renderVistaProductos();
-    renderVistaHistorial();
-    renderInicio();
   });
 }
 
@@ -407,20 +440,15 @@ function wireConfiguracion() {
     showToast('Datos exportados.', 'success');
   });
 
-  document.getElementById('btn-reiniciar-datos').addEventListener('click', () => {
-    if (!confirm('Esto borrará productos y compras actuales y cargará los datos de ejemplo. ¿Continuar?')) return;
-    localStorage.removeItem('gym_productos');
-    localStorage.removeItem('gym_compras');
-    localStorage.removeItem('gym_seeded');
-    localStorage.removeItem('gym_next_product_id');
-    localStorage.removeItem('gym_next_purchase_id');
-    seedProductosIniciales();
-    showToast('Datos de ejemplo restaurados.', 'success');
-    renderInicio();
-    renderVistaProductos();
-    renderVistaNuevaCompra();
-    renderVistaHistorial();
-    renderVistaEstadisticas();
+  // Los productos ya viven en la nube: este botón borraba claves de
+  // localStorage que ya no mandan, así que reiniciarlos sería engañoso (y en
+  // la nube, destructivo). Queda deshabilitado hasta la fase 4, donde se rehace
+  // como "restablecer datos del gimnasio" con su propia confirmación.
+  const btnReiniciar = document.getElementById('btn-reiniciar-datos');
+  btnReiniciar.disabled = true;
+  btnReiniciar.title = 'Disponible cuando termine la migración a la nube.';
+  btnReiniciar.addEventListener('click', () => {
+    showToast('Los productos ahora están en la nube. Esta opción vuelve al terminar la migración.', 'error');
   });
 }
 
