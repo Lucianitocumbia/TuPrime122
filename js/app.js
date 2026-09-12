@@ -3,7 +3,7 @@
 // y coordinar la comunicación entre auth.js, productos.js, compras.js y ui.js.
 // No contiene reglas de negocio propias ni manipula localStorage directamente.
 
-import { requireAuth, logout, getCurrentUser } from './auth.js';
+import { requireAuth, logout } from './auth.js';
 import {
   seedProductosIniciales, listarProductos, buscarYFiltrar,
   obtenerProducto, crearProducto, editarProducto, eliminarProducto,
@@ -29,15 +29,17 @@ let idCompraAEliminar = null;
 
 /* ---------------- Arranque ---------------- */
 
-function init() {
-  if (!requireAuth()) return;
+async function init() {
+  // requireAuth es asíncrona: Firebase necesita un instante para leer la sesión
+  // guardada en el navegador. Si no hay sesión válida, ya redirigió al login.
+  const perfil = await requireAuth();
+  if (!perfil) return;
 
   seedProductosIniciales();
 
-  const usuario = getCurrentUser();
-  document.getElementById('user-name').textContent = usuario;
-  document.getElementById('user-avatar').textContent = usuario.slice(0, 1).toUpperCase();
-  document.getElementById('config-usuario').textContent = usuario;
+  document.getElementById('user-name').textContent = perfil.nombre;
+  document.getElementById('user-avatar').textContent = perfil.nombre.slice(0, 1).toUpperCase();
+  document.getElementById('config-usuario').textContent = perfil.email;
 
   poblarSelectCategorias(document.getElementById('pf-categoria'), false);
   poblarSelectCategorias(document.getElementById('prod-filtro-categoria'), true);

@@ -19,13 +19,13 @@
 
     <div class="headline">
       <h1>Gestión de<br><span>ventas</span> para<br>tu gimnasio.</h1>
-      <p>Productos, stock, compras y estadísticas en un solo panel. Sin instalaciones, todo en tu navegador.</p>
+      <p>Productos, stock, compras y estadísticas en un solo panel. Sin instalaciones, con tus datos guardados en la nube.</p>
     </div>
 
     <div class="stat-row">
-      <div class="stat"><b>100%</b><span>Local, sin servidores</span></div>
-      <div class="stat"><b>0</b><span>Configuración inicial</span></div>
-      <div class="stat"><b>24/7</b><span>Disponible offline</span></div>
+      <div class="stat"><b>100%</b><span>En la nube, siempre al día</span></div>
+      <div class="stat"><b>0</b><span>Instalación necesaria</span></div>
+      <div class="stat"><b>24/7</b><span>Acceso desde cualquier dispositivo</span></div>
     </div>
   </section>
 
@@ -38,17 +38,16 @@
 
       <form id="login-form" autocomplete="off">
         <div class="form-row">
-          <label for="usuario">Usuario</label>
-          <input type="text" id="usuario" name="usuario" placeholder="Tu usuario" autocomplete="username">
+          <label for="email">Email</label>
+          <input type="email" id="email" name="email" placeholder="tu@email.com" autocomplete="username" required>
         </div>
         <div class="form-row">
           <label for="password">Contraseña</label>
           <input type="password" id="password" name="password" placeholder="Tu contraseña" autocomplete="current-password">
         </div>
-        <button type="submit" class="btn btn-primary btn-block">Ingresar</button>
+        <button type="submit" class="btn btn-primary btn-block" id="btn-ingresar">Ingresar</button>
       </form>
 
-      <p class="login-hint">Credenciales de prueba: usuario <b>123</b> / contraseña <b>123</b></p>
     </div>
   </section>
 
@@ -59,22 +58,37 @@
 <script type="module">
   import { login, redirectIfAuthenticated } from './js/auth.js';
 
-  redirectIfAuthenticated();
-
   const form = document.getElementById('login-form');
   const errorBox = document.getElementById('login-error');
+  const boton = document.getElementById('btn-ingresar');
 
-  form.addEventListener('submit', (e) => {
+  function mostrarError(mensaje) {
+    errorBox.textContent = mensaje;
+    errorBox.classList.remove('hidden');
+  }
+
+  // Si el navegador ya tiene una sesión guardada, va directo al dashboard.
+  redirectIfAuthenticated();
+
+  form.addEventListener('submit', async (e) => {
     e.preventDefault();
-    const usuario = document.getElementById('usuario').value.trim();
+    const email = document.getElementById('email').value.trim();
     const password = document.getElementById('password').value;
 
-    const result = login(usuario, password);
-    if (result.ok) {
-      window.location.href = 'dashboard.html';
-    } else {
-      errorBox.textContent = result.message;
-      errorBox.classList.remove('hidden');
+    errorBox.classList.add('hidden');
+    boton.disabled = true;
+    boton.textContent = 'Ingresando…';
+
+    try {
+      const result = await login(email, password);
+      if (result.ok) {
+        window.location.href = 'dashboard.html';
+        return;
+      }
+      mostrarError(result.message);
+    } finally {
+      boton.disabled = false;
+      boton.textContent = 'Ingresar';
     }
   });
 </script>
